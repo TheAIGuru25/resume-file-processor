@@ -44,9 +44,10 @@ app.post('/extract-text', async (req, res) => {
     let extractedText = '';
     let extractionMethod = '';
 
-    // Process based on file type
-    switch (fileType) {
-      case 'application/pdf':
+// Process based on file type - improved handling
+    switch (true) {
+      case fileType === 'application/pdf':
+      case fileType.includes('pdf'):
         try {
           const pdfData = await pdfParse(fileBuffer);
           extractedText = pdfData.text;
@@ -56,8 +57,12 @@ app.post('/extract-text', async (req, res) => {
         }
         break;
 
-      case 'application/msword':
-      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+      case fileType === 'application/msword':
+      case fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+      case fileType.includes('wordprocessingml'):
+      case fileType.includes('officedocument'):
+      case fileType.includes('msword'):
+      case fileType.includes('word'):
         try {
           const result = await mammoth.extractRawText({ buffer: fileBuffer });
           extractedText = result.value;
@@ -67,7 +72,8 @@ app.post('/extract-text', async (req, res) => {
         }
         break;
 
-      case 'text/plain':
+      case fileType === 'text/plain':
+      case fileType.includes('text'):
         try {
           extractedText = fileBuffer.toString('utf8');
           extractionMethod = 'Text file reading';
@@ -81,10 +87,12 @@ app.post('/extract-text', async (req, res) => {
           error: `Unsupported file type: ${fileType}`,
           supportedTypes: [
             'application/pdf',
-            'application/msword',
+            'application/msword', 
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'text/plain'
-          ]
+          ],
+          receivedType: fileType,
+          hint: 'This service supports PDF, Word documents, and text files'
         });
     }
 
