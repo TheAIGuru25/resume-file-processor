@@ -79,20 +79,46 @@ app.post('/extract-text', async (req, res) => {
         }
         break;
 
-      case fileType === 'application/msword':
+     case fileType === 'application/msword':
       case fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
       case fileType.includes('wordprocessingml'):
       case fileType.includes('officedocument'):
       case fileType.includes('msword'):
       case fileType.includes('word'):
         console.log('Processing as Word document...');
+        console.log('Buffer length:', fileBuffer.length);
+        console.log('First 20 bytes:', fileBuffer.slice(0, 20));
+        
+        // Check if buffer is empty or too small
+        if (fileBuffer.length === 0) {
+          throw new Error('File buffer is empty - possible base64 decoding issue');
+        }
+        
+        if (fileBuffer.length < 100) {
+          throw new Error(`File buffer too small (${fileBuffer.length} bytes) - possible corruption`);
+        }
+        
+        // Check if it looks like a ZIP file (DOCX files are ZIP archives)
+        const zipSignature = fileBuffer.slice(0, 4);
+        const expectedZipStart = Buffer.from([0x50, 0x4B, 0x03, 0x04]); // "PK" ZIP signature
+        
+        if (!zipSignature.equals(expectedZipStart)) {
+          console.log('Warning: File does not have ZIP signature. Expected:', expectedZipStart, 'Got:', zipSignature);
+          // Try to process anyway, might be an older DOC format
+        }
+        
         try {
           const result = await mammoth.extractRawText({ buffer: fileBuffer });
           extractedText = result.value;
           extractionMethod = 'Word document parsing';
           console.log('Word document processed successfully, text length:', extractedText.length);
         } catch (error) {
-          console.log('Word processing error:', error.message);
+          console.log('Mammoth processing error:', error.message);
+          console.log('File buffer info:', {
+            length: fileBuffer.length,
+            firstBytes: fileBuffer.slice(0, 10),
+            lastBytes: fileBuffer.slice(-10)
+          });
           throw new Error(`Word document extraction failed: ${error.message}`);
         }
         break;
