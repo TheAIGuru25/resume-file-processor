@@ -11,16 +11,28 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Health check endpoint
+// Health check endpoint (enhanced)
 app.get('/', (req, res) => {
   res.json({ 
     status: 'File Processing Service Online',
     supportedFormats: ['pdf', 'doc', 'docx', 'txt'],
-    version: '1.0.0'
+    version: '1.0.0',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString()
   });
 });
 
-// Main file processing endpoint
+// Dedicated health endpoint for monitoring
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'alive',
+    service: 'file-processor',
+    uptime: Math.floor(process.uptime()),
+    memory: process.memoryUsage(),
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Main file processing endpoint with enhanced debugging
 app.post('/extract-text', async (req, res) => {
   console.log('=== NEW REQUEST ===');
@@ -196,6 +208,46 @@ app.post('/extract-text', async (req, res) => {
   }
 });
 
+// Keep-Alive functionality
+function startKeepAlive() {
+  const SERVICE_URL = process.env.RENDER_EXTERNAL_URL || 'https://resume-file-processor.onrender.com';
+  const PING_INTERVAL = 10 * 60 * 1000; // 10 minutes
+  
+  console.log('🔄 Starting internal keep-alive service...');
+  console.log('📍 Service URL:', SERVICE_URL);
+  
+  const pingMyself = async () => {
+    try {
+      const response = await fetch(`${SERVICE_URL}/health`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`✅ Self-ping successful: ${response.status} | Uptime: ${data.uptime}s | ${new Date().toLocaleTimeString()}`);
+      } else {
+        console.log(`⚠️ Self-ping warning: ${response.status} at ${new Date().toLocaleTimeString()}`);
+      }
+    } catch (error) {
+      console.log(`❌ Self-ping failed: ${error.message} at ${new Date().toLocaleTimeString()}`);
+    }
+  };
+  
+  // Initial ping after 2 minutes (let server fully start)
+  setTimeout(() => {
+    console.log('🚀 Keep-alive initialized, starting ping cycle...');
+    pingMyself(); // First ping immediately
+    setInterval(pingMyself, PING_INTERVAL); // Then every 10 minutes
+  }, 120000); // 2 minute delay
+}
+
+// Start the server
 app.listen(PORT, () => {
-  console.log(`File Processing Service running on port ${PORT}`);
+  console.log(`🚀 File Processing Service running on port ${PORT}`);
+  console.log(`📊 Process ID: ${process.pid}`);
+  console.log(`💾 Node version: ${process.version}`);
+  
+  // Start keep-alive only in production (Render environment)
+  if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
+    startKeepAlive();
+  } else {
+    console.log('🏠 Development mode - keep-alive disabled');
+  }
 });
